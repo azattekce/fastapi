@@ -123,3 +123,32 @@ def delete_tarif(tarif_id: int):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+# 📌 5️⃣ ID'ye göre belirli bir tarifi güncelleme (PUT /tarifler/{tarif_id})
+@app.put("/tarifler/{tarif_id}")
+def update_tarif(tarif_id: int, updated_tarif: TarifModel):
+    """ ID'ye göre belirli bir tarifi günceller. """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM tarifler WHERE id = ?", (tarif_id,))
+        tarif = cursor.fetchone()
+
+        if not tarif:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Tarif bulunamadı!")
+
+        cursor.execute("""
+            UPDATE tarifler
+            SET baslik = ?, aciklama = ?, malzemeler = ?, hazirlanisi = ?, resim = ?, url = ?
+            WHERE id = ?
+        """, (updated_tarif.baslik, updated_tarif.aciklama, json.dumps(updated_tarif.malzemeler), 
+                updated_tarif.hazirlanisi, updated_tarif.resim, updated_tarif.url, tarif_id))
+        
+        conn.commit()
+        conn.close()
+
+        return {"message": "Tarif başarıyla güncellendi!", "tarif": updated_tarif.dict()}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
