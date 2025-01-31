@@ -2,9 +2,18 @@ import sqlite3
 import json
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+# 📌 CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True
+)
 # 📌 Veritabanı bağlantı fonksiyonu
 def get_db_connection():
     """ Yeni bir SQLite bağlantısı döndürür. """
