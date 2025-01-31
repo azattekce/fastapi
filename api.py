@@ -101,3 +101,25 @@ def get_tarif_by_id(tarif_id: int):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+# 📌 4️⃣ ID'ye göre belirli bir tarifi silme (DELETE /tarifler/{tarif_id})
+@app.delete("/tarifler/{tarif_id}")
+def delete_tarif(tarif_id: int):
+    """ ID'ye göre belirli bir tarifi siler. """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM tarifler WHERE id = ?", (tarif_id,))
+        tarif = cursor.fetchone()
+
+        if not tarif:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Tarif bulunamadı!")
+
+        cursor.execute("DELETE FROM tarifler WHERE id = ?", (tarif_id,))
+        conn.commit()
+        conn.close()
+
+        return {"message": "Tarif başarıyla silindi!"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
