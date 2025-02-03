@@ -1,12 +1,18 @@
-import sqlite3
-import json
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+import json
+
+# ✅ DB servis fonksiyonlarını içe aktar
+from db_service import (
+    add_tarif_to_db, get_all_tarifler_from_db,
+    get_tarif_by_id_from_db, delete_tarif_from_db,
+    update_tarif_in_db
+)
 
 app = FastAPI()
 
-# 📌 CORS middleware
+# ✅ CORS ayarları
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,14 +20,8 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True
 )
-# 📌 Veritabanı bağlantı fonksiyonu
-def get_db_connection():
-    """ Yeni bir SQLite bağlantısı döndürür. """
-    conn = sqlite3.connect("tarifler.db", check_same_thread=False)  # ✅ Thread hatasını önlemek için
-    conn.row_factory = sqlite3.Row  # ✅ Verileri sözlük formatında döndürmek için
-    return conn
 
-# 📌 Pydantic Modeli (Tarif için giriş doğrulama)
+# ✅ Tarif modeli
 class TarifModel(BaseModel):
     baslik: str
     aciklama: str
@@ -30,62 +30,35 @@ class TarifModel(BaseModel):
     resim: str
     url: str
 
-# 📌 📌 1️⃣ Yeni tarif ekleme (POST /tarifler)
+# 1️⃣ Tarif Ekleme
 @app.post("/tarifler")
 def add_tarif(tarif: TarifModel):
-    """ Yeni bir tarif ekler. """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO tarifler (baslik, aciklama, malzemeler, hazirlanisi, resim, url) 
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (tarif.baslik, tarif.aciklama, json.dumps(tarif.malzemeler), tarif.hazirlanisi, tarif.resim, tarif.url))
-        
-        conn.commit()
-        conn.close()
-
+        add_tarif_to_db(tarif)
         return {"message": "Tarif başarıyla eklendi!", "tarif": tarif.dict()}
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# 📌 2️⃣ Tüm tarifleri listeleme (GET /tarifler)
+# 2️⃣ Tüm Tarifleri Getirme
 @app.get("/tarifler")
 def get_all_tarifler():
-    """ Tüm tarifleri getirir. """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tarifler")
-        tarifler = cursor.fetchall()
-        conn.close()
-
+        tarifler = get_all_tarifler_from_db()
         if not tarifler:
             raise HTTPException(status_code=404, detail="Tarif bulunamadı!")
-
+        
         return {"tarifler": [
             {"id": t["id"], "baslik": t["baslik"], "aciklama": t["aciklama"],
              "malzemeler": json.loads(t["malzemeler"]), "hazirlanisi": t["hazirlanisi"],
              "resim": t["resim"], "url": t["url"]} for t in tarifler]}
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# 📌 3️⃣ ID'ye göre belirli bir tarifi getirme (GET /tarifler/{tarif_id})
+# 3️⃣ Belirli Tarif Getirme
 @app.get("/tarifler/{tarif_id}")
 def get_tarif_by_id(tarif_id: int):
-    """ ID'ye göre belirli bir tarifi getirir. """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tarifler WHERE id = ?", (tarif_id,))
-        tarif = cursor.fetchone()
-        conn.close()
-
+        tarif = get_tarif_by_id_from_db(tarif_id)
         if not tarif:
             raise HTTPException(status_code=404, detail="Tarif bulunamadı!")
 
@@ -98,57 +71,31 @@ def get_tarif_by_id(tarif_id: int):
             "resim": tarif["resim"],
             "url": tarif["url"]
         }
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-# 📌 4️⃣ ID'ye göre belirli bir tarifi silme (DELETE /tarifler/{tarif_id})
+
+# 4️⃣ Tarif Silme
 @app.delete("/tarifler/{tarif_id}")
 def delete_tarif(tarif_id: int):
-    """ ID'ye göre belirli bir tarifi siler. """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tarifler WHERE id = ?", (tarif_id,))
-        tarif = cursor.fetchone()
-
+        tarif = get_tarif_by_id_from_db(tarif_id)
         if not tarif:
-            conn.close()
             raise HTTPException(status_code=404, detail="Tarif bulunamadı!")
 
-        cursor.execute("DELETE FROM tarifler WHERE id = ?", (tarif_id,))
-        conn.commit()
-        conn.close()
-
+        delete_tarif_from_db(tarif_id)
         return {"message": "Tarif başarıyla silindi!"}
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-# 📌 5️⃣ ID'ye göre belirli bir tarifi güncelleme (PUT /tarifler/{tarif_id})
+
+# 5️⃣ Tarif Güncelleme
 @app.put("/tarifler/{tarif_id}")
 def update_tarif(tarif_id: int, updated_tarif: TarifModel):
-    """ ID'ye göre belirli bir tarifi günceller. """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tarifler WHERE id = ?", (tarif_id,))
-        tarif = cursor.fetchone()
-
+        tarif = get_tarif_by_id_from_db(tarif_id)
         if not tarif:
-            conn.close()
             raise HTTPException(status_code=404, detail="Tarif bulunamadı!")
 
-        cursor.execute("""
-            UPDATE tarifler
-            SET baslik = ?, aciklama = ?, malzemeler = ?, hazirlanisi = ?, resim = ?, url = ?
-            WHERE id = ?
-        """, (updated_tarif.baslik, updated_tarif.aciklama, json.dumps(updated_tarif.malzemeler), 
-                updated_tarif.hazirlanisi, updated_tarif.resim, updated_tarif.url, tarif_id))
-        
-        conn.commit()
-        conn.close()
-
+        update_tarif_in_db(tarif_id, updated_tarif)
         return {"message": "Tarif başarıyla güncellendi!", "tarif": updated_tarif.dict()}
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
